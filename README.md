@@ -1,4 +1,4 @@
-# re-entrancy-privacy-delegateCall-dos
+# attack prevention-re-entrancy-privacy-delegateCall-dos
 LearnWeb3 tutorial for preventing attacks
 
 Lesson Type: Quiz
